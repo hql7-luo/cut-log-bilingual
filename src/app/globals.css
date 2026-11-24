@@ -203,6 +203,11 @@ html[lang="en"] .calendar-day span { white-space: normal; text-align: center; ov
 .energy-measures dd small { color: var(--muted); font-weight: 500; font-size: .72rem; white-space: nowrap; }
 .energy-progress { height: 8px; margin-bottom: 8px; }
 .energy-notes { display: grid; gap: 4px; margin-bottom: 12px; }
+.energy-breakdown { color: var(--muted); font-size: .8125rem; }
+.energy-breakdown summary { width: fit-content; padding: 5px 0; cursor: pointer; color: var(--accent-text); }
+.energy-breakdown dl { display: grid; gap: 4px; margin: 0 0 6px; }
+.energy-breakdown dl > div { display: flex; justify-content: space-between; gap: 8px; }
+.energy-breakdown dd { margin: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .budget-card[data-over="true"] .energy-budget strong { color: var(--danger); }
 .budget-card[data-over="true"] .energy-progress { --macro: var(--danger); }
 .macros { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; border-top: 1px solid var(--border); padding-top: 13px; }
