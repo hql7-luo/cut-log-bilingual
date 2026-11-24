@@ -93,11 +93,8 @@ function CalendarDayDetails({ active, rows, addFood, close }: {
   }>
     <EnergyFigures intake={active.kcal} expenditure={active.expenditure} shortfall={active.shortfall}/>
     <p className="fine calendar-goal">{t`摄入目标 ${whole.format(active.target)} kcal · ${t(ACTIVITY_LABELS[active.activity])}日`}</p>
-    {energy && (energy.baseline !== null || energy.training > 0) && <p className="fine" aria-label={t("消耗明细")}>
-      {energy.baseline !== null && <>{t("日常消耗约")} {whole.format(energy.baseline)} kcal · </>}
-      {t("训练额外约")} {whole.format(energy.training)} kcal
-    </p>}
-    <TrainingEstimateNotes energy={energy}/>
+    {active.shortfall !== null && <p className="fine">{t("按已记录摄入估算")}</p>}
+    <TrainingEstimateNotes energy={energy} expanded/>
     <div className="calendar-logs">
       <section aria-labelledby="calendar-day-workouts">
         <h3 id="calendar-day-workouts">{t("训练记录")}</h3>
@@ -108,7 +105,6 @@ function CalendarDayDetails({ active, rows, addFood, close }: {
         {foods.length ? <FoodList rows={foods} mealHeading="h4"/> : <p className="fine">{t("当天没有饮食记录。")}</p>}
       </section>
     </div>
-    <p className="fine">{t("日常消耗按低活动日估算，训练按体重、类型和时长另计。缺口为全天估算消耗减去已记摄入。")}</p>
   </Modal>;
 }
 

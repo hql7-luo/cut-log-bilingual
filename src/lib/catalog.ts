@@ -9,7 +9,7 @@ function reference(
   return { name, aliases, category, fdcId, base, defaultAmount, defaultUnit, portions, note, basisGrams: 100, source: "usda-reference" };
 }
 
-const rice = reference("白米饭", ["米饭", "白饭", "熟米饭", "rice", "white rice", "cooked rice"], "主食", 168878,
+const rice = reference("白米饭", ["米饭", "白饭", "熟米饭", "rice", "white rice", "cooked rice", "cooked white rice"], "主食", 168878,
   nutrition(130, 2.69, 28.17, 0.28), 1, "碗", { 碗: 150, 杯: 158, 份: 150 }, "熟重。小碗以 150 g 估算。");
 const noodles = reference("面条（熟）", ["面", "面条", "熟面条", "pasta", "plain noodles", "noodles"], "主食", 169737,
   nutrition(158, 5.8, 30.86, 0.93), 1, "碗", { 碗: 180, 份: 180, 杯: 124 }, "按熟小麦面参考值。汤、油、肉和浇头可另外记录。");

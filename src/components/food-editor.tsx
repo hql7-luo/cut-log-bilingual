@@ -3,7 +3,7 @@
 import { useLanguage } from "./language";
 import { useRef, useState } from "react";
 import type { FoodDraft, FoodSpec, Nutrition } from "../lib/model";
-import { fdcLink, foodTotals, fromSpec, NUTRIENT_LABEL, NUTRIENTS, number, nutrition, portionGrams, sourceLabel, weightInGrams, whole } from "../lib/nutrition";
+import { fdcLink, foodTotals, fromSpec, NUTRIENT_LABEL, NUTRIENTS, number, nutrition, portionGrams, sourceLabel, weightInGrams, whole, withNutritionTotals } from "../lib/nutrition";
 import { Button, ErrorText, Field, Icon } from "./ui";
 
 export const blankFood = (name = ""): FoodDraft => ({ name, amount: 1, unit: "份", grams: null, estimatedPortion: false, note: "", lookup: "", spec: null });
@@ -24,9 +24,9 @@ export function FoodEditor({ food, label, save, close, editRecord = false }: {
   // Keep an explicitly measured portion when the number of servings changes.
   const measured = useRef(!food.estimatedPortion && food.grams !== null && food.amount > 0
     ? { unit: food.unit, gramsPerUnit: food.grams / food.amount } : null);
-  const initial = foodTotals(food)?.total;
+  const initial = foodTotals(food)?.total ?? food.reportedNutrition;
   const [values, setValues] = useState(() => Object.fromEntries(NUTRIENTS.map((key) =>
-    [key, initial ? String(Math.round(initial[key] * 10) / 10) : ""])) as Record<keyof Nutrition, string>);
+    [key, initial?.[key] === undefined ? "" : String(Math.round(initial[key] * 10) / 10)])) as Record<keyof Nutrition, string>);
   const entry = foodTotals(draft);
   const units = [...new Set([draft.unit, "g", "份", "个", "碗", "勺", "杯", "片", "块", "瓶", ...Object.keys(draft.spec?.portions ?? {})])];
 
@@ -68,12 +68,7 @@ export function FoodEditor({ food, label, save, close, editRecord = false }: {
         };
         ready = fromSpec(spec, serving ? draft.amount : draft.grams ?? 100, labelUnit);
       } else {
-        const mass = ready.grams ?? weightInGrams(ready.amount, ready.unit);
-        ready = { ...ready, spec: {
-          name: ready.name, aliases: [], category: ready.spec?.category ?? "其他", source: "manual", base,
-          basisGrams: mass, defaultUnit: ready.unit, defaultAmount: ready.amount, portions: mass ? { [ready.unit]: mass / ready.amount } : {},
-          note: "此份营养由你手动确认。",
-        }, note: "", estimatedPortion: false, photoRange: undefined };
+        ready = withNutritionTotals(ready, base);
       }
     }
     if (!foodTotals(ready)) { setError("这个单位尚未换算。可填实际克重，或填写本次营养。"); return; }

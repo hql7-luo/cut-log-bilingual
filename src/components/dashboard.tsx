@@ -88,13 +88,22 @@ export function WorkoutList({ rows, onEdit, onDelete, showDetails = false }: {
 }
 
 // Explain the same training assumptions on the overview and the calendar.
-export function TrainingEstimateNotes({ energy }: { energy: CalendarDayStats["energy"] }) {
+export function TrainingEstimateNotes({ energy, expanded = false }: { energy: CalendarDayStats["energy"]; expanded?: boolean }) {
   const { language, t } = useLanguage();
   if (!energy) return null;
   const assumed = energy.assumed.map(({ kind, minutes }) => t`${t(ACTIVITY_LABELS[kind])} ${minutes} 分钟`)
     .join(language === "en" ? ", " : "、");
   return <>
-    {energy.fromSelection && <p className="fine">{t("按所选活动和已记有氧预估消耗。")}</p>}
+    {(energy.baseline !== null || energy.trainingDetails.length > 0) && <details className="energy-breakdown" open={expanded || undefined}>
+      <summary>{t("消耗明细")}</summary>
+      <dl>
+        {energy.baseline !== null && <div><dt>{t("日常消耗")}</dt><dd>{whole.format(energy.baseline)} kcal</dd></div>}
+        {energy.trainingDetails.map(({ kind, minutes, kcal, assumed }) => <div key={kind}>
+          <dt>{t(WORKOUT_LABELS[kind])} · {assumed && <>{t("暂按")} </>}{t`${minutes} 分钟`}</dt>
+          <dd>+{whole.format(kcal)} kcal</dd>
+        </div>)}
+      </dl>
+    </details>}
     {assumed && <p className="fine">{t`暂无时长，暂按${assumed}估算。`}</p>}
     {energy.missingDuration > 0 && <p className="fine">{t`${energy.missingDuration} 项训练补填时长后会计入消耗。`}</p>}
   </>;
@@ -120,6 +129,7 @@ function Budget({ profile, day, rows }: { profile: Profile; day: CalendarDayStat
         <dt>{balanceLabel}</dt>
         <dd aria-label={balanceLabel}><strong>{day.shortfall === null ? "—" : whole.format(Math.abs(day.shortfall))}</strong>
           {day.shortfall !== null && <> <small>kcal</small></>}</dd>
+        {day.shortfall !== null && <dd className="fine">{t("按已记录摄入估算")}</dd>}
       </div>
     </dl>
     <dl className="energy-measures">
@@ -131,8 +141,7 @@ function Budget({ profile, day, rows }: { profile: Profile; day: CalendarDayStat
       aria-label={t("今日热量进度")}/>
     <div className="energy-notes">
       {day.expenditure === null ? <a className="text-link" href="#settings">{t("填写年龄后查看全天消耗")}</a> :
-        <p className="fine">{energy && energy.training > 0 && t`含训练额外消耗约 ${whole.format(energy.training)} kcal。 `}
-          {day.kcal === null ? t("记录饮食后显示缺口。") : t("缺口按全天估算消耗减去已记摄入。")}</p>}
+        day.kcal === null && <p className="fine">{t("记录饮食后显示缺口。")}</p>}
       <TrainingEstimateNotes energy={energy}/>
     </div>
     <div className="macros">{MACROS.map((macro) => {
@@ -178,7 +187,8 @@ export function Dashboard({ today, profile, dayStats, manualActivity, foods, wor
           <Icon name={activityIcons[value]} size={19}/><span>{t(ACTIVITY_LABELS[value])}</span>
           <small>{whole.format(profile.calories[value])} kcal</small>
         </button>)}</div>
-        <p className="activity-note">{manualActivity ? <button type="button" className="text-link" onClick={() => onActivity(null)}>{t("改为跟随训练记录")}</button> : t("消耗随已记训练时长更新，也可以手选活动预估。")}</p>
+        <p className="activity-note">{t("活动选择影响摄入目标和预估，已记训练始终计入消耗。")}</p>
+        {manualActivity && <button type="button" className="text-link" onClick={() => onActivity(null)}>{t("改为跟随训练记录")}</button>}
       </section>
       <section className="card weight-card">
         <CardHead title={t("体重趋势")} icon="scale"><button type="button" className="text-link" onClick={onWeight}>{t("记录体重")}</button></CardHead>

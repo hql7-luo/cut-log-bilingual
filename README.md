@@ -21,7 +21,7 @@ For a standalone browser demo, run `npm run build:demo` and open `demo.html`. Lo
 
 - **Meals.** Parse English or Chinese text, adjust portions, search the built-in food list, or enter a package label. Save frequent foods for reuse. Dictation is available when the browser supports it.
 - **Workouts.** Track strength sets and reps, basketball, and cardio. Reuse workout templates and review exercise history.
-- **Daily energy.** Compare logged intake with a calorie budget and estimated expenditure. A logged training duration takes precedence over a default when previewing today's selected activity.
+- **Daily energy.** Compare logged intake with a calorie budget and estimated expenditure. Logged training always counts. Activity selection sets the intake target and can fill in unlogged durations for today's preview. Open the burn breakdown for the daily baseline and individual activity estimates.
 - **Progress.** View daily details and weekly, monthly, or quarterly calorie summaries. Track weight trends, export CSV, and review goal adjustments before applying them.
 
 Food portions and energy expenditure are estimates. Log dates currently use Pacific Time. The initial nutrition and training targets are examples.

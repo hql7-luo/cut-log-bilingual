@@ -91,7 +91,7 @@ test("calendar distinguishes a long basketball and lifting day from lifting with
   assert.equal(calendarStats(rows, { ...profile, age: null }, longDay, longDay, shortDay).days[0].energy.training, 1260);
 });
 
-test("today's activity selection updates expenditure and deficit using matching durations first", () => {
+test("today's planned activity never hides logged training and fills only missing durations", () => {
   const day = "2026-11-23";
   const tomorrow = "2026-11-24";
   const profile = { ...DEFAULT_PROFILE, age: 25, height: 173, weight: 80 };
@@ -107,12 +107,18 @@ test("today's activity selection updates expenditure and deficit using matching 
   const strength = choice("strength");
   const basketball = choice("basketball");
   const both = choice("both");
-  assert.deepEqual([rest, strength, basketball, both].map(({ expenditure }) => expenditure), [2219, 2429, 2639, 2849]);
-  assert.deepEqual([rest, strength, basketball, both].map(({ shortfall }) => shortfall), [1959, 2169, 2379, 2589]);
+  assert.deepEqual([rest, strength, basketball, both].map(({ expenditure }) => expenditure), [2429, 2429, 2849, 2849]);
+  assert.deepEqual([rest, strength, basketball, both].map(({ shortfall }) => shortfall), [2169, 2169, 2589, 2589]);
   assert.deepEqual(strength.energy.assumed, []);
   assert.deepEqual(both.energy.assumed, [{ kind: "basketball", minutes: 60 }]);
   assert.equal(both.energy.missingDuration, 1);
   assert.deepEqual(choice("strength", []).energy.assumed, [{ kind: "strength", minutes: 50 }]);
+
+  const twoHours = choice("rest", [workout("game", "basketball", 120)]);
+  assert.deepEqual(twoHours.energy.trainingDetails, [{ kind: "basketball", minutes: 120, kcal: 840, assumed: false }]);
+  assert.equal(twoHours.expenditure, 2954);
+  assert.equal(twoHours.target, profile.calories.rest);
+  assert.equal(choice("basketball", [workout("game", "basketball", 120)]).expenditure, twoHours.expenditure);
 
   const recorded = [...workoutRows.filter(({ id }) => id !== "unmeasured-ball"), workout("timed-ball", "basketball", 150)];
   assert.equal(choice("both", recorded).energy.training, 1365);
@@ -161,6 +167,36 @@ test("English, fractions, known raw weights, unknown foods and user labels", () 
   const whey = parseLocal("两勺蛋白粉", [preferred, ...CATALOG])[0];
   assert.equal(foodTotals(whey).total.protein, 50);
   assert.equal(whey.spec.source, "label");
+});
+
+test("spoken nutrition applies to its food and saved portions take precedence over defaults", () => {
+  const [whey, banana] = parseLocal("两勺蛋白粉，每勺120大卡，24克蛋白，再加一根香蕉");
+  assert.equal(foodTotals(whey).total.kcal, 240);
+  assert.equal(foodTotals(whey).total.protein, 48);
+  assert.equal(banana.name, "香蕉");
+  assert.equal(parseLocal("两勺蛋白粉 每勺120大卡24克蛋白").length, 1);
+  const english = parseLocal("2 scoops whey protein, 120 kcal per scoop, 24 g protein");
+  assert.equal(english.length, 1);
+  assert.equal(foodTotals(english[0]).total.protein, 48);
+  assert.equal(foodTotals(parseLocal("200 g cooked white rice")[0]).total.kcal, 260);
+  const [unknown] = parseLocal("一盒验收饮料，120大卡，蛋白质6克");
+  assert.equal(foodTotals(unknown), null);
+  assert.deepEqual(unknown.reportedNutrition, { kcal: 120, protein: 6 });
+  const spec = { ...whey.spec, defaultAmount: 1, basisGrams: null, base: nutrition(120, 24, 2, 1) };
+  const saved = { spec, amount: 2, unit: "勺", grams: 60 };
+  const [habitual] = parseLocal("蛋白粉", [spec, ...CATALOG], [saved]);
+  assert.equal(habitual.amount, 2);
+  assert.equal(foodTotals(habitual).total.kcal, 240);
+});
+
+test("exports workout duration once for a session with multiple exercises", () => {
+  const move = { name: "深蹲", muscle: "legs", weight: 40, unit: "kg", sets: 3, reps: 8 };
+  const payload = { day: "2026-11-23", kind: "strength", exercises: [move, { ...move, name: "腿弯举" }], minutes: 45, note: "", time: 0 };
+  const csv = recordsCsv([{ id: "leg", kind: "workout", payload }]);
+  const [, first, second] = csv.split("\r\n").map((row) => row.slice(1, -1).split('","'));
+  assert.equal(first[12], "45");
+  assert.equal(second[12], "");
+  assert.equal(second[3], "腿弯举");
 });
 
 test("USDA mapping rejects incomplete results, and the model can only supply parsing fields", () => {

@@ -60,7 +60,6 @@ function estimateDayEnergy(profile: Profile, workouts: Workout[], selectedActivi
   const duration = new Map<WorkoutKind, number>();
   const untimed = new Map<WorkoutKind, number>();
   for (const { kind, minutes } of workouts) {
-    if (selected && (kind === "strength" || kind === "basketball") && !selected.includes(kind)) continue;
     if (minutes == null || !Number.isFinite(minutes) || minutes <= 0) {
       untimed.set(kind, (untimed.get(kind) ?? 0) + 1);
       continue;
@@ -73,15 +72,18 @@ function estimateDayEnergy(profile: Profile, workouts: Workout[], selectedActivi
     if (duration.has(kind)) continue;
     const minutes = ASSUMED_MINUTES[kind];
     duration.set(kind, minutes);
-    untimed.delete(kind);
+    const incomplete = untimed.get(kind);
+    if (incomplete) untimed.set(kind, incomplete - 1);
     assumed.push({ kind, minutes });
   }
 
-  const extra = Array.from(duration).reduce((total, [kind, minutes]) =>
-    total + (WORKOUT_MET[kind] - 1) * 3.5 * profile.weight * minutes / 200, 0);
-  const training = Math.round(extra);
+  const trainingDetails = Array.from(duration, ([kind, minutes]) => ({
+    kind, minutes, kcal: (WORKOUT_MET[kind] - 1) * 3.5 * profile.weight * minutes / 200,
+    assumed: assumed.some((entry) => entry.kind === kind),
+  }));
+  const training = Math.round(trainingDetails.reduce((total, { kcal }) => total + kcal, 0));
   const missingDuration = Array.from(untimed.values()).reduce((total, count) => total + count, 0);
-  return { baseline, training, missingDuration, assumed, fromSelection: selected !== null,
+  return { baseline, training, trainingDetails, missingDuration, assumed, fromSelection: assumed.length > 0,
     total: baseline === null ? null : baseline + training };
 }
 
@@ -115,7 +117,7 @@ export function calendarStats(rows: Row[], profile: Profile, start: string, end:
     const activity = selection ?? activityFor(dayWorkouts);
     const target = dailyTarget(profile, activity).kcal;
     const kcal = intake.get(day) ?? null;
-    // A selection previews today's energy. Past days use recorded training for their totals.
+    // A selection can add planned activity today. Logged workouts always count.
     const energy = day <= today ? estimateDayEnergy({ ...profile, weight }, dayWorkouts, day === today ? selection : undefined) : null;
     const expenditure = energy?.total ?? null;
     const shortfall = expenditure === null || kcal === null ? null : expenditure - kcal;

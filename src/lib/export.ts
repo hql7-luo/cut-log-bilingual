@@ -24,8 +24,9 @@ export function recordsCsv(rows: Row[], language: Language = "zh") {
   }
   for (const { payload } of recordsOf(clean, "workout")) {
     const moves = payload.exercises.length ? payload.exercises : [null];
-    for (const move of moves) data.push([t("训练"), payload.day, t(WORKOUT_LABELS[payload.kind]), t(move?.name), null, null, null, null, null, null,
-      null, null, payload.minutes, move ? t(MUSCLE_LABELS[move.muscle]) : null, move?.weight, move?.unit, move?.sets, move?.reps,
+    // Duration belongs to the session, even when the export has one row per exercise.
+    for (const [index, move] of moves.entries()) data.push([t("训练"), payload.day, t(WORKOUT_LABELS[payload.kind]), t(move?.name), null, null, null, null, null, null,
+      null, null, index === 0 ? payload.minutes : null, move ? t(MUSCLE_LABELS[move.muscle]) : null, move?.weight, move?.unit, move?.sets, move?.reps,
       null, payload.note, JSON.stringify(payload)]);
   }
   for (const { payload } of recordsOf(clean, "weight")) data.push([t("体重"), payload.day, ...Array(16).fill(null), payload.kg]);

@@ -45,6 +45,19 @@ export function fromSpec(spec: FoodSpec, amount = spec.defaultAmount, unit = spe
   };
 }
 
+// A confirmed total uses the current portion as its nutrition reference.
+export function withNutritionTotals(entry: FoodDraft, base: Nutrition): FoodDraft {
+  const grams = entry.grams ?? weightInGrams(entry.amount, entry.unit);
+  return {
+    ...entry, note: "", photoRange: undefined, reportedNutrition: undefined, estimatedPortion: false,
+    spec: {
+      name: entry.name, aliases: entry.spec?.aliases ?? [], category: entry.spec?.category ?? "其他", source: "manual",
+      base, basisGrams: grams, defaultUnit: entry.unit, defaultAmount: entry.amount,
+      portions: grams ? { [entry.unit]: grams / entry.amount } : {}, note: "此份营养由你手动确认。",
+    },
+  };
+}
+
 export function foodTotals(entry: FoodDraft): { total: Nutrition; bounds?: Bounds } | null {
   const { spec, grams, unit, amount } = entry;
   if (!spec || !Number.isFinite(amount) || amount <= 0 || amount > 10_000) return null;

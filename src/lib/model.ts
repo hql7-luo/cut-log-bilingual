@@ -55,6 +55,7 @@ export type FoodDraft = {
   grams: number | null;
   estimatedPortion: boolean;
   photoRange?: { low: number; high: number };
+  reportedNutrition?: Partial<Nutrition>;
   note: string;
   lookup: string;
 };

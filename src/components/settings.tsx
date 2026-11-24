@@ -2,8 +2,8 @@
 
 import { useLanguage } from "./language";
 import { useState } from "react";
-import { ACTIVITIES, ACTIVITY_LABELS, ACTIVITY_LEVELS, dailyTarget, energyEstimate, type Profile, type Row } from "../lib/model";
-import { number, whole } from "../lib/nutrition";
+import { ACTIVITIES, ACTIVITY_LABELS, ACTIVITY_LEVELS, dailyTarget, energyEstimate, MEAL_LABELS, type FoodLog, type Profile, type Row } from "../lib/model";
+import { foodTotals, number, portionText, whole } from "../lib/nutrition";
 import { CLOUD_ENABLED } from "../lib/public-config";
 import type { useCloudAuth, useTracker } from "../lib/use-tracker";
 import { Button, CardHead, ErrorText, Field, Icon } from "./ui";
@@ -140,7 +140,7 @@ export function SettingsPage({ profile, latest, theme, setTheme, auth, store, pr
   store: ReturnType<typeof useTracker>; providers: Providers; save: (profile: Profile) => Promise<void>;
   exportData: () => void; clearSamples: () => Promise<void>; hasSamples: boolean; message: (text: string) => void;
 }) {
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   async function act(action: () => Promise<unknown>) {
@@ -151,6 +151,14 @@ export function SettingsPage({ profile, latest, theme, setTheme, auth, store, pr
   }
   const describe = (row: Row | null | undefined) => {
     if (!row || !row.payload) return "已移除";
+    if (row.kind === "food") {
+      const food = row.payload as FoodLog;
+      const total = foodTotals(food)?.total;
+      return [t(food.name), portionText(food, language), food.day, t(MEAL_LABELS[food.meal]),
+        total && `${whole.format(total.kcal)} kcal`,
+        total && `${t("蛋白质")} ${number.format(total.protein)} g / ${t("碳水")} ${number.format(total.carbs)} g / ${t("脂肪")} ${number.format(total.fat)} g`]
+        .filter(Boolean).join(" · ");
+    }
     const data = row.payload as { name?: string; day?: string; kg?: number };
     return data.name ?? (data.kg ? `${data.day} · ${data.kg} kg` : data.day ?? "个人设置或模板");
   };
@@ -180,7 +188,8 @@ export function SettingsPage({ profile, latest, theme, setTheme, auth, store, pr
         {Object.entries(store.snapshot.conflicts).map(([key, remote]) =>
           <div className="source-box" key={key}>
             <p>{t("两个设备修改了同一条记录")}</p>
-            <p>{t("设备上")} {t(describe(store.rows.find((row) => `${row.kind}:${row.id}` === key)))} {t("· 云端")} {t(describe(remote))}</p>
+            <p><strong>{t("此设备")}</strong> · {t(describe(store.rows.find((row) => `${row.kind}:${row.id}` === key)))}</p>
+            <p><strong>{t("云端")}</strong> · {t(describe(remote))}</p>
             <div className="inline-actions wrap">
               <Button onClick={() => act(() => store.resolveConflict(key, true))}>{t("保留此设备版本")}</Button>
               <Button variant="quiet" onClick={() => act(() => store.resolveConflict(key, false))}>{t("采用云端版本")}</Button>

@@ -3,7 +3,7 @@
 import { useLanguage } from "./language";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CATALOG, searchCatalog } from "../lib/catalog";
-import { isDay } from "../lib/dates";
+import { dateTitle, isDay } from "../lib/dates";
 import { type FoodDraft, type FoodPreset, type FoodSpec, type LogRow, type Meal, MEALS, MEAL_LABELS, makeId } from "../lib/model";
 import { fdcLink, foodTotals, fromSpec, number, portionText, sourceLabel, sum, whole } from "../lib/nutrition";
 import { applyFoodChoice, inferDay, inferMeal, parseLocal, resolveFood, type ParsedFood } from "../lib/parse-food";
@@ -43,8 +43,8 @@ async function photoData(file: File) {
 }
 
 // This dialog keeps every text or photo result as a draft until the user saves.
-export function FoodModal({ today, date, initialMeal, initial, entryId, favorites, history, providers, getToken, save, setFavorite, close }: {
-  today: string; date: string; initialMeal?: Meal; initial?: FoodDraft[]; entryId?: string;
+export function FoodModal({ today, date, keepDay = false, initialMeal, initial, entryId, favorites, history, providers, getToken, save, setFavorite, close }: {
+  today: string; date: string; keepDay?: boolean; initialMeal?: Meal; initial?: FoodDraft[]; entryId?: string;
   favorites: LogRow<"food_preset">[]; history: LogRow<"food">[]; providers: Providers;
   getToken: () => Promise<string>;
   save: (foods: FoodDraft[], day: string, meal: Meal) => Promise<void>;
@@ -58,6 +58,9 @@ export function FoodModal({ today, date, initialMeal, initial, entryId, favorite
   const [photoNote, setPhotoNote] = useState("");
   const [day, setDay] = useState(date);
   const [meal, setMeal] = useState<Meal>(initialMeal ?? inferMeal(""));
+  const [pickedDay, setPickedDay] = useState(keepDay);
+  const [pickedMeal, setPickedMeal] = useState(Boolean(initialMeal));
+  const [textSuggestion, setTextSuggestion] = useState<{ day?: string; meal?: Meal }>({});
   const [items, setItems] = useState<DraftItem[]>(() => (initial ?? []).map((food) => ({ key: makeId(), food, origin: "manual" })));
   const [editor, setEditor] = useState<Editor | null>(() => entryId && items[0] ? { item: items[0], label: false } : null);
   const [replace, setReplace] = useState("");
@@ -83,7 +86,8 @@ export function FoodModal({ today, date, initialMeal, initial, entryId, favorite
     return () => speech.current?.abort();
   }, []);
 
-  const known = useMemo(() => [...favorites.map(({ payload }) => payload.spec), ...CATALOG], [favorites]);
+  const savedFoods = useMemo(() => favorites.map(({ payload }) => payload), [favorites]);
+  const known = useMemo(() => [...savedFoods.map(({ spec }) => spec), ...CATALOG], [savedFoods]);
   const localResults = searchCatalog(search, known);
   const common = useMemo(() => {
     const counts = new Map<string, { food: FoodDraft; count: number }>();
@@ -121,13 +125,20 @@ export function FoodModal({ today, date, initialMeal, initial, entryId, favorite
     setLoading(true);
     setError("");
     setMessage("");
-    setDay(inferDay(text, today, day));
-    setMeal(inferMeal(text, new Date(), meal));
-    const local = parseLocal(text, known);
+    // Keep the date and meal the user picked. Show any conflicting text beside the preview.
+    const inferredDay = inferDay(text, today, day);
+    const inferredMeal = inferMeal(text, new Date(), meal);
+    setTextSuggestion({
+      day: pickedDay && inferredDay !== day ? inferredDay : undefined,
+      meal: pickedMeal && inferredMeal !== meal ? inferredMeal : undefined,
+    });
+    if (!pickedDay) setDay(inferredDay);
+    if (!pickedMeal) setMeal(inferredMeal);
+    const local = parseLocal(text, known, savedFoods);
     try {
-      if (preferAi && providers.ai) {
+      if (preferAi && providers.ai && !local.some((food) => food.reportedNutrition)) {
         const result = await callProvider("/api/foods/parse", { text, language });
-        preview((result.items as ParsedFood[]).map((item) => resolveFood(item, known)));
+        preview((result.items as ParsedFood[]).map((item) => resolveFood(item, known, savedFoods)));
       } else preview(local);
     } catch { setMessage("在线解析暂不可用，已使用本地解析。"); preview(local); }
     finally { setLoading(false); }
@@ -138,6 +149,7 @@ export function FoodModal({ today, date, initialMeal, initial, entryId, favorite
     setLoading(true);
     setError("");
     setMessage("");
+    setTextSuggestion({});
     try {
       const result = await callProvider("/api/foods/photo", { image: photo, note: photoNote.trim(), language });
       preview((result.items as ParsedFood[]).map((item) => {
@@ -198,7 +210,7 @@ export function FoodModal({ today, date, initialMeal, initial, entryId, favorite
     if (!items.length || unresolved || loading || !day || day > today) return;
     setLoading(true);
     setError("");
-    try { await save(items.map(({ food }) => food), day, meal); }
+    try { await save(items.map(({ food: { reportedNutrition, ...food } }) => food), day, meal); }
     catch (failure) { setError((failure as Error).message); }
     finally { setLoading(false); }
   }
@@ -210,8 +222,16 @@ export function FoodModal({ today, date, initialMeal, initial, entryId, favorite
 
   // Keep date and meal adjustable when opening a saved item directly in its editor.
   const dateAndMeal = <div className="form-grid date-meal">
-    <Field label={t("日期")}><input type="date" max={today} value={day} onChange={(e) => setDay(e.target.value)}/></Field>
-    <Field label={t("餐次")}><select value={meal} onChange={(e) => setMeal(e.target.value as Meal)}>{MEALS.map((key) =>
+    <Field label={t("日期")}><input type="date" max={today} value={day} onChange={(e) => {
+      setDay(e.target.value);
+      setPickedDay(true);
+      setTextSuggestion((before) => ({ ...before, day: undefined }));
+    }}/></Field>
+    <Field label={t("餐次")}><select value={meal} onChange={(e) => {
+      setMeal(e.target.value as Meal);
+      setPickedMeal(true);
+      setTextSuggestion((before) => ({ ...before, meal: undefined }));
+    }}>{MEALS.map((key) =>
       <option key={key} value={key}>{t(MEAL_LABELS[key])}</option>)}</select></Field>
   </div>;
 
@@ -319,6 +339,15 @@ export function FoodModal({ today, date, initialMeal, initial, entryId, favorite
       {message && <p className="notice" role="status">{t(message)}</p>}
       <ErrorText>{error}</ErrorText>
       {items.length > 0 && <div className="review-list" ref={feedback}>
+        {(textSuggestion.day || textSuggestion.meal) && <div className="source-box">
+          <p role="status">{t`文字里写的是 ${[textSuggestion.day && dateTitle(textSuggestion.day, language),
+            textSuggestion.meal && t(MEAL_LABELS[textSuggestion.meal])].filter(Boolean).join(" · ")}，已保留手选值。`}</p>
+          <Button variant="quiet" onClick={() => {
+            if (textSuggestion.day) setDay(textSuggestion.day);
+            if (textSuggestion.meal) setMeal(textSuggestion.meal);
+            setTextSuggestion({});
+          }}>{t("改用文字里的日期或餐次")}</Button>
+        </div>}
         <div className="inline-heading"><h3>{t("确认食物")} <span>{items.length}</span></h3>
           {!entryId && <Button variant="quiet" icon="plus" onClick={() => addManual()}>{t("手动添加")}</Button>}
         </div>
