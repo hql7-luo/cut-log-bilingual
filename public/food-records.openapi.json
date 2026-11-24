@@ -1,0 +1,1090 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Cut Log · Food and Workouts",
+    "version": "1.1.0",
+    "description": "Read and write nutrition totals and append authorized workouts. Store the bearer token in secure connector credentials."
+  },
+  "servers": [
+    {
+      "url": "https://example.com",
+      "description": "Replace with deployed HTTPS origin"
+    }
+  ],
+  "security": [
+    {
+      "connectorToken": []
+    }
+  ],
+  "paths": {
+    "/api/v1/food-records": {
+      "get": {
+        "operationId": "listFoodRecords",
+        "summary": "List entries for a single LA date",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Calendar date in America/Los_Angeles"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "next_cursor from the previous page"
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable or disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "saveFoodBatch",
+        "summary": "Preview or save a meal with 1–24 foods",
+        "description": "For a photo first submit preview=true. Show the user, then send confirmed=true with the same items, date, meal and key. Retain the same idempotency key on retries.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Reuse the same key for the exact operation on retries.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FoodBatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable or disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicate key, duplicate meal, or confirmation/revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/food-records/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getFoodRecord",
+        "summary": "Fetch a food entry and revision",
+        "responses": {
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable or disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateFoodRecord",
+        "summary": "Replace one entry using its current revision",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Reuse the same key for the exact operation on retries.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,128}$"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Revision from a fresh GET, optionally quoted.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\"?\\d+\"?$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FoodUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable or disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicate key, duplicate meal, or confirmation/revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "If-Match required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteFoodRecord",
+        "summary": "Delete one food entry using its current revision",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Reuse the same key for the exact operation on retries.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,128}$"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Revision from a fresh GET, optionally quoted.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\"?\\d+\"?$"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable or disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicate key, duplicate meal, or confirmation/revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "If-Match required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workouts": {
+      "post": {
+        "operationId": "createWorkout",
+        "summary": "Log one strength or cardio session",
+        "description": "Requires workout creation permission. A strength session can state only muscle groups. Reuse the same key if the request is retried.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkoutInput"
+              },
+              "examples": {
+                "chestDay": {
+                  "value": {
+                    "kind": "strength",
+                    "muscles": [
+                      "chest"
+                    ]
+                  }
+                },
+                "benchPress": {
+                  "value": {
+                    "kind": "strength",
+                    "exercises": [
+                      {
+                        "name": "Bench press",
+                        "muscle": "chest",
+                        "weight": 60,
+                        "unit": "lb",
+                        "sets": 4,
+                        "reps": 8
+                      }
+                    ]
+                  }
+                },
+                "basketball": {
+                  "value": {
+                    "kind": "basketball",
+                    "minutes": 45
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkoutReceipt"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Original receipt from an exact retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkoutReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid workout, date or idempotency key"
+          },
+          "401": {
+            "description": "Invalid or expired connector token"
+          },
+          "403": {
+            "description": "Token lacks workout creation permission"
+          },
+          "409": {
+            "description": "Idempotency key was reused with different content"
+          },
+          "429": {
+            "description": "Connector rate limit exceeded"
+          },
+          "503": {
+            "description": "Connector API is disabled or temporarily unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "connectorToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Dedicated cut_ connector token"
+      }
+    },
+    "schemas": {
+      "Nutrients": {
+        "type": "object",
+        "required": [
+          "kcal",
+          "protein_g",
+          "carbs_g",
+          "fat_g"
+        ],
+        "properties": {
+          "kcal": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 20000
+          },
+          "protein_g": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3000
+          },
+          "carbs_g": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3000
+          },
+          "fat_g": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3000
+          }
+        }
+      },
+      "FoodItem": {
+        "type": "object",
+        "required": [
+          "name",
+          "amount",
+          "unit",
+          "kcal",
+          "protein_g",
+          "carbs_g",
+          "fat_g"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 140
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0.001,
+            "maximum": 10000
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "grams": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0.001,
+            "maximum": 20000
+          },
+          "kcal": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 20000
+          },
+          "protein_g": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3000
+          },
+          "carbs_g": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3000
+          },
+          "fat_g": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3000
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "estimate",
+              "label",
+              "manual"
+            ],
+            "default": "estimate"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 350
+          },
+          "range": {
+            "type": "object",
+            "required": [
+              "low",
+              "high"
+            ],
+            "properties": {
+              "low": {
+                "$ref": "#/components/schemas/Nutrients"
+              },
+              "high": {
+                "$ref": "#/components/schemas/Nutrients"
+              }
+            }
+          }
+        }
+      },
+      "FoodBatch": {
+        "type": "object",
+        "required": [
+          "meal",
+          "items"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Calendar date in America/Los_Angeles"
+          },
+          "meal": {
+            "type": "string",
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 24,
+            "items": {
+              "$ref": "#/components/schemas/FoodItem"
+            }
+          },
+          "input_type": {
+            "type": "string",
+            "enum": [
+              "text",
+              "photo"
+            ],
+            "default": "text"
+          },
+          "preview": {
+            "type": "boolean",
+            "description": "When true, preview a batch without saving."
+          },
+          "confirmed": {
+            "type": "boolean",
+            "description": "Set only after the user explicitly confirmed the exact photo preview."
+          },
+          "allow_duplicate": {
+            "type": "boolean",
+            "description": "Set only when the user confirms another identical meal."
+          }
+        }
+      },
+      "FoodUpdate": {
+        "type": "object",
+        "required": [
+          "item"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Calendar date in America/Los_Angeles"
+          },
+          "meal": {
+            "type": "string",
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack"
+            ]
+          },
+          "item": {
+            "$ref": "#/components/schemas/FoodItem"
+          }
+        }
+      },
+      "FoodRecord": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 140
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0.001,
+            "maximum": 10000
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "grams": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0.001,
+            "maximum": 20000
+          },
+          "kcal": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 20000
+          },
+          "protein_g": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3000
+          },
+          "carbs_g": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3000
+          },
+          "fat_g": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3000
+          },
+          "source": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 350
+          },
+          "range": {
+            "type": "object",
+            "required": [
+              "low",
+              "high"
+            ],
+            "properties": {
+              "low": {
+                "$ref": "#/components/schemas/Nutrients"
+              },
+              "high": {
+                "$ref": "#/components/schemas/Nutrients"
+              }
+            }
+          },
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Calendar date in America/Los_Angeles"
+          },
+          "meal": {
+            "type": "string",
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack"
+            ]
+          },
+          "fdc_id": {
+            "type": "integer"
+          },
+          "estimated_portion": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Result": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FoodRecord"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "preview": {
+            "type": "boolean"
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "deleted": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "current_revision": {
+            "type": "integer"
+          }
+        }
+      },
+      "WorkoutInput": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Defaults to the current Los Angeles date"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "strength",
+              "basketball",
+              "incline",
+              "treadmill",
+              "other"
+            ]
+          },
+          "muscles": {
+            "type": "array",
+            "maxItems": 6,
+            "items": {
+              "type": "string",
+              "enum": [
+                "chest",
+                "back",
+                "shoulders",
+                "legs",
+                "arms",
+                "core"
+              ]
+            }
+          },
+          "exercises": {
+            "type": "array",
+            "maxItems": 30,
+            "items": {
+              "$ref": "#/components/schemas/WorkoutExercise"
+            }
+          },
+          "minutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 600
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "WorkoutExercise": {
+        "type": "object",
+        "required": [
+          "name",
+          "muscle",
+          "weight",
+          "unit",
+          "sets",
+          "reps"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 70
+          },
+          "muscle": {
+            "type": "string",
+            "enum": [
+              "chest",
+              "back",
+              "shoulders",
+              "legs",
+              "arms",
+              "core"
+            ]
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2500
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "lb",
+              "kg"
+            ]
+          },
+          "sets": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "reps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 300
+          }
+        }
+      },
+      "WorkoutReceipt": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "date"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "strength",
+              "basketball",
+              "incline",
+              "treadmill",
+              "other"
+            ]
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}
