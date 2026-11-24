@@ -1,7 +1,7 @@
 import { CATALOG, exactFood } from "./catalog.ts";
 import { hourLA, shiftDay } from "./dates.ts";
-import type { FoodDraft, FoodSpec, Meal } from "./model.ts";
-import { fromSpec, normalize, portionGrams, weightInGrams } from "./nutrition.ts";
+import type { FoodDraft, FoodPreset, FoodSpec, Meal, Nutrition } from "./model.ts";
+import { foodTotals, fromSpec, normalize, NUTRIENTS, portionGrams, weightInGrams, withNutritionTotals } from "./nutrition.ts";
 
 // Parse household quantities, keeping the source phrase when nutrition is unknown.
 const chinese: Record<string, number> = { 零: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
@@ -86,9 +86,14 @@ function compatibleSpec(name: string, all: FoodSpec[], unit: string) {
     (spec.basisGrams !== null || unit === spec.defaultUnit)) ?? candidate;
 }
 
-export function resolveFood(item: ParsedFood, foods: FoodSpec[] = CATALOG): FoodDraft {
+export function resolveFood(item: ParsedFood, foods: FoodSpec[] = CATALOG, favorites: FoodPreset[] = []): FoodDraft {
   const unit = normalizeUnit(item.unit);
   const spec = compatibleSpec(item.name, foods, unit);
+  const saved = item.amount === null && !item.grams ? favorites.find((preset) =>
+    preset.spec === spec && (!unit || unit === preset.unit)) : undefined;
+  if (saved) {
+    return { ...fromSpec(saved.spec, saved.amount, saved.unit), grams: saved.grams, note: item.note ?? "", lookup: item.lookup ?? "" };
+  }
   const quantity = item.amount ?? (item.grams ? item.grams : spec?.defaultAmount ?? 1);
   const chosenUnit = unit || (item.grams ? "g" : spec?.defaultUnit ?? "份");
   const explicitMass = weightInGrams(quantity, chosenUnit);
@@ -114,11 +119,86 @@ export function applyFoodChoice(entry: FoodDraft, spec: FoodSpec): FoodDraft {
   if (grams === null && spec.basisGrams === null && entry.unit !== "份" && entry.unit !== spec.defaultUnit) {
     return { ...match, note: "请核对单位与标签份量。" };
   }
-  return { ...match, grams, estimatedPortion: entry.estimatedPortion, note: "" };
+  const chosen = { ...match, grams, estimatedPortion: entry.estimatedPortion, note: "" };
+  return entry.reportedNutrition ? applyReportedNutrition(chosen, entry.reportedNutrition) : chosen;
 }
 
-export function parseLocal(text: string, foods: FoodSpec[] = CATALOG): FoodDraft[] {
-  return splitPhrase(text).slice(0, 24).map((phrase) => resolveFood(parseClause(phrase), foods));
+type ReportedNutrition = { unit?: string; values: Partial<Nutrition> };
+const nutritionNumber = "(\\d{1,5}(?:\\.\\d+)?)";
+const servingUnit = new RegExp("^(?:每\\s*|per\\s+)(" + UNIT + ")(?![a-z])\\s*[:：]?\\s*", "i");
+const trailingServing = new RegExp("\\s+per\\s+(" + UNIT + ")(?![a-z])$", "i");
+const inlineServing = new RegExp("(?:每\\s*|\\bper\\s+)" + UNIT + "(?![a-z])", "i");
+const kcalEntry = new RegExp("(?:热量\\s*[:：]?\\s*)?" + nutritionNumber + "\\s*(?:kcal|calories?|cals?|卡路里|大卡|千卡|卡)(?![a-z])", "i");
+const macroLabels = { protein: "蛋白质|蛋白|protein", carbs: "碳水化合物|碳水|carbohydrates?|carbs?", fat: "脂肪|fat" } as const;
+const macroEntries = Object.entries(macroLabels).map(([key, label]) => ({
+  key: key as keyof typeof macroLabels,
+  pattern: new RegExp(nutritionNumber + "\\s*(?:克|grams?|g)\\s*(?:" + label + ")(?![a-z])|(?:" + label +
+    ")\\s*[:：]?\\s*" + nutritionNumber + "\\s*(?:克|grams?|g)(?![a-z])", "i"),
+}));
+
+// A nutrition note can follow its food on the same line or after a comma.
+function reportedNutrition(phrase: string): ReportedNutrition | null {
+  const serving = servingUnit.exec(phrase);
+  const trailing = serving ? null : trailingServing.exec(phrase);
+  const values: Partial<Nutrition> = {};
+  let rest = phrase.slice(serving?.[0].length ?? 0, trailing?.index).replace(/^含\s*/, "");
+  rest = rest.replace(kcalEntry, (_, value) => { values.kcal = Number(value); return ""; });
+  for (const { key, pattern } of macroEntries) {
+    rest = rest.replace(pattern, (_, before, after) => { values[key] = Number(before ?? after); return ""; });
+  }
+  if (!Object.keys(values).length || !/^[\s:：,/]*$/.test(rest)) return null;
+  const unit = serving?.[1] ?? trailing?.[1];
+  return { values, unit: unit && normalizeUnit(unit) };
+}
+
+function applyReportedNutrition(food: FoodDraft, values: Partial<Nutrition>): FoodDraft {
+  const reference = foodTotals(food)?.total;
+  const total = { ...reference, ...values };
+  if (NUTRIENTS.some((key) => total[key] === undefined)) {
+    return { ...food, reportedNutrition: values, note: "已提取文字里的营养数值，请补齐其余项目。" };
+  }
+  return {
+    ...withNutritionTotals(food, total as Nutrition), reportedNutrition: values, estimatedPortion: food.estimatedPortion,
+    note: NUTRIENTS.every((key) => values[key] !== undefined) ? "营养按文字中的数值记录。" : "已采用文字中的营养数值，其余项目沿用食物参考。",
+  };
+}
+
+function applyServingNutrition(food: FoodDraft, note: ReportedNutrition): FoodDraft {
+  const { unit, values } = note;
+  const gramsPerUnit = unit ? weightInGrams(1, unit) ?? (food.spec && portionGrams(food.spec, 1, unit)) : null;
+  const multiplier = !unit ? 1 : unit === food.unit ? food.amount :
+    gramsPerUnit && food.grams ? food.grams / gramsPerUnit : null;
+  if (multiplier === null) return { ...food, note: "请核对文字中的每份营养和记录单位。" };
+  const totals: Partial<Nutrition> = {};
+  for (const key of NUTRIENTS) {
+    const value = values[key];
+    if (value !== undefined) totals[key] = value * multiplier;
+  }
+  return applyReportedNutrition(food, totals);
+}
+
+export function parseLocal(text: string, foods: FoodSpec[] = CATALOG, favorites: FoodPreset[] = []): FoodDraft[] {
+  const entries: { food: string; note: ReportedNutrition | null }[] = [];
+  for (const phrase of splitPhrase(text)) {
+    const note = reportedNutrition(phrase);
+    if (note) {
+      const previous = entries.at(-1);
+      if (previous) {
+        const inherited = previous.note;
+        const sameUnit = !note.unit || !inherited?.unit || note.unit === inherited.unit;
+        previous.note = { unit: note.unit ?? inherited?.unit, values: { ...(sameUnit && inherited?.values), ...note.values } };
+      }
+      continue;
+    }
+    const servingIndex = phrase.search(inlineServing);
+    const noteIndex = servingIndex > 0 ? servingIndex : phrase.search(kcalEntry);
+    const inline = noteIndex > 0 ? reportedNutrition(phrase.slice(noteIndex)) : null;
+    entries.push({ food: inline ? phrase.slice(0, noteIndex) : phrase, note: inline });
+  }
+  return entries.slice(0, 24).map(({ food, note }) => {
+    const draft = resolveFood(parseClause(cleanName(food)), foods, favorites);
+    return note ? applyServingNutrition(draft, note) : draft;
+  });
 }
 
 export function inferMeal(text: string, now = new Date(), selected?: Meal): Meal {
