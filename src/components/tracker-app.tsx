@@ -29,7 +29,8 @@ const nav = [
 type Page = typeof nav[number]["id"];
 const offline: Providers = { ai: false, usda: false, vision: false };
 
-type Dialog = { kind: "food"; day: string; meal?: Meal; items?: FoodDraft[]; row?: LogRow<"food"> }
+type FoodDialog = { kind: "food"; day: string; meal?: Meal; items?: FoodDraft[]; keepDay?: boolean; row?: LogRow<"food"> };
+type Dialog = FoodDialog
   | { kind: "training"; day?: string; row?: LogRow<"workout"> } | { kind: "weight"; row?: LogRow<"weight"> } | { kind: "date-picker" };
 
 function mountName() {
@@ -146,7 +147,9 @@ function Tracker() {
     timer.current = setTimeout(() => setToast(null), undo ? 12_000 : 4500);
   }
 
-  const openFood = (day = today, meal?: Meal, items?: FoodDraft[]) => setDialog({ kind: "food", day, meal, items });
+  const openFood = (day = today, options?: Pick<FoodDialog, "meal" | "items" | "keepDay">) =>
+    setDialog({ kind: "food", day, ...options });
+  const addFoodOnDate = (day: string) => openFood(day, { keepDay: true });
   const editFood = (row: LogRow<"food">) => setDialog({
     kind: "food", row, day: row.payload.day, meal: row.payload.meal, items: [row.payload],
   });
@@ -188,7 +191,7 @@ function Tracker() {
   const providers = session ? providerFlags : offline;
   const recordsPage = page === "food" || page === "training" ? page : null;
   const viewedDay = recordsPage ? recordDay ?? today : today;
-  const selectDay = (day: string) => setRecordDay(day === today ? null : day);
+  const selectDay = (day: string) => setRecordDay(day);
   const status = !store.ready ? "载入中" : session ? store.problem ? "同步暂停" :
     Object.keys(store.snapshot.conflicts).length ? "待处理冲突" : store.snapshot.pending.length ? "待同步" :
       store.snapshot.pulled ? "已同步" : "连接云端" : hasSamples ? "示例数据" : "本机记录";
@@ -228,7 +231,7 @@ function Tracker() {
         </div>
         {page !== "settings" && <div className="page-actions">
           {(page === "today" || page === "food") && <Button variant="primary" icon="plus" disabled={!store.ready}
-            onClick={() => openFood(viewedDay)}>{t("记录饮食")}</Button>}
+            onClick={() => openFood(viewedDay, { keepDay: Boolean(recordDay) })}>{t("记录饮食")}</Button>}
           {(page === "today" || page === "training") && <Button variant={page === "today" ? "secondary" : "primary"} icon="plus"
             disabled={!store.ready} onClick={() => addWorkout(viewedDay)}>{t("记录训练")}</Button>}
           {page === "progress" && <Button variant="primary" icon="plus" disabled={!store.ready} onClick={addWeight}>{t("记录体重")}</Button>}
@@ -240,13 +243,13 @@ function Tracker() {
           foods={foods} workouts={workouts} weights={weights} onActivity={changeActivity} onFood={() => openFood()} onWeight={addWeight}
           onFoodEdit={editFood} onFoodDelete={remove} onWorkoutEdit={editWorkout} onWorkoutDelete={remove}/>}
         {page === "food" && <FoodHistory today={today} day={viewedDay} showToday={() => selectDay(today)}
-          rows={foods} presets={presets} open={openFood} edit={editFood} remove={remove}
-          copy={(meal, items) => openFood(today, meal, items.map(({ payload }) => payload))} deletePreset={remove}/>}
+          rows={foods} presets={presets} open={addFoodOnDate} edit={editFood} remove={remove}
+          copy={(meal, items) => openFood(today, { meal, items: items.map(({ payload }) => payload), keepDay: true })} deletePreset={remove}/>}
         {page === "training" && <TrainingPage today={today} day={viewedDay} selectDay={selectDay} rows={workouts} presets={workoutPresets} edit={editWorkout}
           add={addWorkout} remove={remove} deletePreset={remove}/>}
         {page === "progress" && <ProgressPage today={today} rows={weights} profile={profile} add={addWeight}
           edit={editWeight} remove={remove} confirm={saveProfile}/>}
-        {page === "calendar" && <CalendarPage rows={store.rows} profile={profile} today={today} addFood={openFood}/>}
+        {page === "calendar" && <CalendarPage rows={store.rows} profile={profile} today={today} addFood={addFoodOnDate}/>}
         {page === "settings" && <SettingsPage profile={profile} latest={latest} theme={theme} setTheme={themeChange} auth={auth}
           store={store} providers={providers} save={saveProfile} exportData={() => downloadCsv(store.rows, today, language)}
           clearSamples={async () => { await store.discardExamples(); notify("示例已移除，可以开始记录。"); }}
@@ -257,8 +260,8 @@ function Tracker() {
       <a href={`#${id}`} key={id} aria-current={page === id ? "page" : undefined}><Icon name={icon} size={21}/><span>{t(label)}</span></a>)}</nav>
     {dialog?.kind === "date-picker" && (recordsPage ? <MonthDatePicker rows={store.rows} profile={profile} today={today}
       mode={recordsPage} selected={viewedDay} close={close} select={(day) => { selectDay(day); close(); }}/>
-      : <HomeDatePicker rows={store.rows} profile={profile} today={today} close={close} addFood={openFood}/>)}
-    {dialog?.kind === "food" && <FoodModal today={today} date={dialog.day} initialMeal={dialog.meal} initial={dialog.items}
+      : <HomeDatePicker rows={store.rows} profile={profile} today={today} close={close} addFood={addFoodOnDate}/>)}
+    {dialog?.kind === "food" && <FoodModal today={today} date={dialog.day} keepDay={dialog.keepDay} initialMeal={dialog.meal} initial={dialog.items}
       entryId={dialog.row?.id} favorites={presets} history={foods.slice(0, 90)} providers={providers} getToken={auth.token} close={close}
       setFavorite={async (food) => {
         if (!food.spec) return;
