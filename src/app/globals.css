@@ -1,6 +1,5 @@
-@layer theme, base, components, utilities;
-@import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/preflight.css" layer(base);
+/* A plain import: the webpack build reads "layer(...)" as a media query and would drop the reset. */
+@import "tailwindcss/preflight.css";
 
 /* Neutral surfaces keep attention on the numbers and primary actions. */
 :root {
