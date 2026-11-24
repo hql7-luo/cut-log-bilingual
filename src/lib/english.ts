@@ -77,6 +77,7 @@ export const ENGLISH: Readonly<Record<string, string>> = {
   "日常消耗": "Daily baseline",
   "暂按": "Assumed",
   "按已记录摄入估算": "Based on logged intake",
+  "若吃到日目标 {0} kcal，{1} {2} kcal。": "At your {0} kcal intake goal · {1} {2} kcal.",
   "活动选择影响摄入目标和预估，已记训练始终计入消耗。": "Activity sets your intake target and preview. Logged workouts always count.",
   "日常消耗约": "Daily baseline about",
   "训练额外约": "Extra from training about",
