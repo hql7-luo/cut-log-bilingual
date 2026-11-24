@@ -94,7 +94,7 @@ function CalendarDayDetails({ active, rows, addFood, close }: {
     <EnergyFigures intake={active.kcal} expenditure={active.expenditure} shortfall={active.shortfall}/>
     <p className="fine calendar-goal">{t`摄入目标 ${whole.format(active.target)} kcal · ${t(ACTIVITY_LABELS[active.activity])}日`}</p>
     {active.shortfall !== null && <p className="fine">{t("按已记录摄入估算")}</p>}
-    <TrainingEstimateNotes energy={energy} expanded/>
+    <TrainingEstimateNotes energy={energy} target={active.target} expanded/>
     <div className="calendar-logs">
       <section aria-labelledby="calendar-day-workouts">
         <h3 id="calendar-day-workouts">{t("训练记录")}</h3>

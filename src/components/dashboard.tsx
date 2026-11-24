@@ -88,9 +88,12 @@ export function WorkoutList({ rows, onEdit, onDelete, showDetails = false }: {
 }
 
 // Explain the same training assumptions on the overview and the calendar.
-export function TrainingEstimateNotes({ energy, expanded = false }: { energy: CalendarDayStats["energy"]; expanded?: boolean }) {
+export function TrainingEstimateNotes({ energy, target, expanded = false }: {
+  energy: CalendarDayStats["energy"]; target: number; expanded?: boolean;
+}) {
   const { language, t } = useLanguage();
   if (!energy) return null;
+  const balanceAtTarget = energy.total === null ? null : energy.total - target;
   const assumed = energy.assumed.map(({ kind, minutes }) => t`${t(ACTIVITY_LABELS[kind])} ${minutes} 分钟`)
     .join(language === "en" ? ", " : "、");
   return <>
@@ -103,6 +106,9 @@ export function TrainingEstimateNotes({ energy, expanded = false }: { energy: Ca
           <dd>+{whole.format(kcal)} kcal</dd>
         </div>)}
       </dl>
+      {balanceAtTarget !== null && <p className="fine">
+        {t`若吃到日目标 ${whole.format(target)} kcal，${t(balanceAtTarget < 0 ? "估算盈余" : "估算缺口")} ${whole.format(Math.abs(balanceAtTarget))} kcal。`}
+      </p>}
     </details>}
     {assumed && <p className="fine">{t`暂无时长，暂按${assumed}估算。`}</p>}
     {energy.missingDuration > 0 && <p className="fine">{t`${energy.missingDuration} 项训练补填时长后会计入消耗。`}</p>}
@@ -142,7 +148,7 @@ function Budget({ profile, day, rows }: { profile: Profile; day: CalendarDayStat
     <div className="energy-notes">
       {day.expenditure === null ? <a className="text-link" href="#settings">{t("填写年龄后查看全天消耗")}</a> :
         day.kcal === null && <p className="fine">{t("记录饮食后显示缺口。")}</p>}
-      <TrainingEstimateNotes energy={energy}/>
+      <TrainingEstimateNotes energy={energy} target={target.kcal}/>
     </div>
     <div className="macros">{MACROS.map((macro) => {
       const delta = target[macro] - consumed[macro];

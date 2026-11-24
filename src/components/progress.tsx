@@ -4,7 +4,7 @@ import { useLanguage } from "./language";
 import type { Translate } from "../lib/locale";
 import { useState } from "react";
 import { compactDay } from "../lib/dates";
-import { ACTIVITIES, ACTIVITY_LABELS, type LogRow, type Profile } from "../lib/model";
+import { ACTIVITIES, ACTIVITY_LABELS, dailyTarget, type LogRow, type Profile } from "../lib/model";
 import { number, whole } from "../lib/nutrition";
 import { trend, trendReview } from "../lib/trends";
 import { Button, CardHead, Empty, ErrorText, Field, IconButton, Modal } from "./ui";
@@ -60,13 +60,14 @@ export function ProgressPage({ today, rows, profile, add, edit, remove, confirm 
   const review = trendReview(rows.filter((row) => !row.sample).map(({ payload }) => payload), today, profile);
   const kcal = review?.adjustment ?? 0;
   const shifted = Object.fromEntries(ACTIVITIES.map((activity) => [activity, profile.calories[activity] + kcal])) as Profile["calories"];
+  const adjustedProfile = { ...profile, calories: shifted };
   const canAdjust = kcal !== 0 && Object.values(shifted).every((target) => target >= Math.max(1000, profile.protein * 4 + profile.fat * 9));
   async function handleReview(apply: boolean) {
     if (!review?.day || busy) return;
     setBusy(true);
     setError("");
     try {
-      await confirm({ ...profile, handledReview: review.day, calories: apply ? shifted : profile.calories });
+      await confirm({ ...(apply ? adjustedProfile : profile), handledReview: review.day });
       setAdjust(false);
     } catch (failure) { setError((failure as Error).message); }
     finally { setBusy(false); }
@@ -122,10 +123,18 @@ export function ProgressPage({ today, rows, profile, add, edit, remove, confirm 
       <><Button onClick={() => setAdjust(false)}>{t("取消")}</Button>
         <Button variant="primary" onClick={() => handleReview(true)} disabled={busy || !canAdjust}>{t("确认新目标")}</Button></>
     }>
-      {ACTIVITIES.map((activity) => <div className="history-row" key={activity}>
-        <span>{t(ACTIVITY_LABELS[activity])}</span><span>{whole.format(profile.calories[activity])} kcal</span>
-        <strong>{whole.format(shifted[activity])} kcal</strong>
-      </div>)}
+      <p className="fine">{t("蛋白质")} {number.format(profile.protein)} g · {t("脂肪")} {number.format(profile.fat)} g</p>
+      {ACTIVITIES.map((activity) => {
+        const current = dailyTarget(profile, activity);
+        const adjusted = dailyTarget(adjustedProfile, activity);
+        return <div className="history-row" key={activity}>
+          <div>
+            <span>{t(ACTIVITY_LABELS[activity])}</span>
+            <div className="fine">{t("碳水")} {number.format(current.carbs)} → {number.format(adjusted.carbs)} g</div>
+          </div>
+          <span>{whole.format(current.kcal)} → <strong>{whole.format(adjusted.kcal)}</strong> kcal</span>
+        </div>;
+      })}
       <ErrorText>{error}</ErrorText>
     </Modal>}
   </div>;
