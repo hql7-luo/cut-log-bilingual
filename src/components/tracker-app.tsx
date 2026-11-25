@@ -11,7 +11,7 @@ import { foodTotals, normalize, sum, whole } from "../lib/nutrition";
 import { CLOUD_ENABLED } from "../lib/public-config";
 import { useCloudAuth, useToday, useTracker } from "../lib/use-tracker";
 import { Dashboard, FoodList } from "./dashboard";
-import { CalendarPage, HomeDatePicker, MonthDatePicker } from "./calendar";
+import { CalendarPage, MonthDatePicker } from "./calendar";
 import { FoodModal, type Providers } from "./food-modal";
 import { ProgressPage, WeightModal } from "./progress";
 import { SettingsPage, type Theme } from "./settings";
@@ -31,7 +31,8 @@ const offline: Providers = { ai: false, usda: false, vision: false };
 
 type FoodDialog = { kind: "food"; day: string; meal?: Meal; items?: FoodDraft[]; keepDay?: boolean; row?: LogRow<"food"> };
 type Dialog = FoodDialog
-  | { kind: "training"; day?: string; row?: LogRow<"workout"> } | { kind: "weight"; row?: LogRow<"weight"> } | { kind: "date-picker" };
+  | { kind: "training"; day?: string; row?: LogRow<"workout"> }
+  | { kind: "weight"; day?: string; row?: LogRow<"weight"> } | { kind: "date-picker" };
 
 function mountName() {
   const hash = window.location.hash.slice(1);
@@ -101,6 +102,13 @@ function Tracker() {
   const [providerFlags, setProviderFlags] = useState<Providers>(offline);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Use the same date selection for the overview and both record pages.
+  const datePickerMode = page === "today" ? "balance" : page === "food" || page === "training" ? page : null;
+  const viewedDay = recordDay ?? today;
+  const historicalOverview = page === "today" && viewedDay !== today;
+  const pageTitle = historicalOverview ? t`${compactDay(viewedDay)} 总览` : t(nav.find(({ id }) => id === page)!.title);
+  const selectDay = (day: string) => setRecordDay(day);
+
   useEffect(() => {
     const change = () => {
       setPage(mountName());
@@ -154,7 +162,7 @@ function Tracker() {
     kind: "food", row, day: row.payload.day, meal: row.payload.meal, items: [row.payload],
   });
   const addWorkout = (day = today) => setDialog({ kind: "training", day });
-  const addWeight = () => setDialog({ kind: "weight" });
+  const addWeight = () => setDialog({ kind: "weight", day: viewedDay });
   const editWorkout = (row: LogRow<"workout">) => setDialog({ kind: "training", row });
   const editWeight = (row: LogRow<"weight">) => setDialog({ kind: "weight", row });
   const close = () => setDialog(null);
@@ -172,7 +180,7 @@ function Tracker() {
   }
 
   async function changeActivity(activity: Activity | null) {
-    try { await store.save([{ kind: "activity", id: today, payload: activity ? { day: today, activity } : null }]); }
+    try { await store.save([{ kind: "activity", id: viewedDay, payload: activity ? { day: viewedDay, activity } : null }]); }
     catch (error) { notify((error as Error).message); }
   }
 
@@ -181,17 +189,15 @@ function Tracker() {
   const weights = useMemo(() => recordsOf(store.rows, "weight"), [store.rows]);
   const presets = useMemo(() => recordsOf(store.rows, "food_preset"), [store.rows]);
   const workoutPresets = useMemo(() => recordsOf(store.rows, "workout_preset"), [store.rows]);
-  const manual = recordsOf(store.rows, "activity").find(({ id }) => id === today)?.payload.activity;
+  const manual = recordsOf(store.rows, "activity").some(({ id }) => id === viewedDay);
   const latest = [...weights].filter((row) => !row.sample).sort((a, b) => b.payload.day.localeCompare(a.payload.day))[0]?.payload.kg;
   const exampleProfile = useMemo(() => ({ ...DEFAULT_PROFILE, goalDay: shiftDay(today, 84) }), [today]);
   const profile = recordsOf(store.rows, "profile")[0]?.payload ?? exampleProfile;
-  const todayStats = useMemo(() => calendarStats(store.rows, profile, today, today, today).days[0], [store.rows, profile, today]);
+  const dayStats = useMemo(() => calendarStats(store.rows, profile, viewedDay, viewedDay, today).days[0],
+    [store.rows, profile, viewedDay, today]);
   const hasSamples = store.rows.some((row) => row.sample);
   const session = auth.session;
   const providers = session ? providerFlags : offline;
-  const recordsPage = page === "food" || page === "training" ? page : null;
-  const viewedDay = recordsPage ? recordDay ?? today : today;
-  const selectDay = (day: string) => setRecordDay(day);
   const status = !store.ready ? "载入中" : session ? store.problem ? "同步暂停" :
     Object.keys(store.snapshot.conflicts).length ? "待处理冲突" : store.snapshot.pending.length ? "待同步" :
       store.snapshot.pulled ? "已同步" : "连接云端" : hasSamples ? "示例数据" : "本机记录";
@@ -222,11 +228,14 @@ function Tracker() {
     <main className="main" id="main" tabIndex={-1}>
       <div className="page-heading">
         <div>
-          {(page === "today" || recordsPage) && <button type="button" className="date-label" aria-label={t("选择日期")} aria-haspopup="dialog"
-            disabled={!store.ready} onClick={() => setDialog({ kind: "date-picker" })}>
-            <Icon name="calendar" size={17}/><span suppressHydrationWarning>{dateTitle(viewedDay, language)}</span><Icon name="down" size={15}/>
-          </button>}
-          <div className="page-title"><h1>{t(nav.find(({ id }) => id === page)!.title)}</h1>
+          {datePickerMode && <div className="inline-actions">
+            <button type="button" className="date-label" aria-label={t("选择日期")} aria-haspopup="dialog"
+              disabled={!store.ready} onClick={() => setDialog({ kind: "date-picker" })}>
+              <Icon name="calendar" size={17}/><span suppressHydrationWarning>{dateTitle(viewedDay, language)}</span><Icon name="down" size={15}/>
+            </button>
+            {historicalOverview && <button type="button" className="text-link return-today" onClick={() => setRecordDay(null)}>{t("回到今天")}</button>}
+          </div>}
+          <div className="page-title"><h1>{pageTitle}</h1>
             <a className={`state-chip ${hasSamples ? "sample-chip" : ""}`} href="#settings"><span/>{t(status)}</a></div>
         </div>
         {page !== "settings" && <div className="page-actions">
@@ -239,8 +248,9 @@ function Tracker() {
       </div>
       {store.volatile && <p className="notice storage-notice">{t("浏览器仅允许临时保存。关闭页面前可在设置中导出 CSV。")}</p>}
       {!store.ready ? <div className="card loading-card" role="status">{t(store.problem || "正在载入记录…")}</div> : <>
-        {page === "today" && <Dashboard today={today} profile={profile} dayStats={todayStats} manualActivity={Boolean(manual)}
-          foods={foods} workouts={workouts} weights={weights} onActivity={changeActivity} onFood={() => openFood()} onWeight={addWeight}
+        {page === "today" && <Dashboard today={today} profile={profile} dayStats={dayStats} manualActivity={manual}
+          foods={foods} workouts={workouts} weights={weights} onActivity={changeActivity}
+          onFood={() => openFood(viewedDay, { keepDay: Boolean(recordDay) })} onWeight={addWeight}
           onFoodEdit={editFood} onFoodDelete={remove} onWorkoutEdit={editWorkout} onWorkoutDelete={remove}/>}
         {page === "food" && <FoodHistory today={today} day={viewedDay} showToday={() => selectDay(today)}
           rows={foods} presets={presets} open={addFoodOnDate} edit={editFood} remove={remove}
@@ -258,9 +268,8 @@ function Tracker() {
     </main>
     <nav className="bottom-nav" aria-label={t("手机导航")}>{nav.map(({ id, label, icon }) =>
       <a href={`#${id}`} key={id} aria-current={page === id ? "page" : undefined}><Icon name={icon} size={21}/><span>{t(label)}</span></a>)}</nav>
-    {dialog?.kind === "date-picker" && (recordsPage ? <MonthDatePicker rows={store.rows} profile={profile} today={today}
-      mode={recordsPage} selected={viewedDay} close={close} select={(day) => { selectDay(day); close(); }}/>
-      : <HomeDatePicker rows={store.rows} profile={profile} today={today} close={close} addFood={addFoodOnDate}/>)}
+    {dialog?.kind === "date-picker" && datePickerMode && <MonthDatePicker rows={store.rows} profile={profile} today={today}
+      mode={datePickerMode} selected={viewedDay} close={close} select={(day) => { selectDay(day); close(); }}/>}
     {dialog?.kind === "food" && <FoodModal today={today} date={dialog.day} keepDay={dialog.keepDay} initialMeal={dialog.meal} initial={dialog.items}
       entryId={dialog.row?.id} favorites={presets} history={foods.slice(0, 90)} providers={providers} getToken={auth.token} close={close}
       setFavorite={async (food) => {
@@ -298,7 +307,7 @@ function Tracker() {
         close();
         notify("训练已保存。", undo);
       }}/>}
-    {dialog?.kind === "weight" && <WeightModal today={today} initial={dialog.row} close={close} save={async (day, kg) => {
+    {dialog?.kind === "weight" && <WeightModal today={today} date={dialog.day} initial={dialog.row} close={close} save={async (day, kg) => {
       if (!isDay(day) || day > today || !Number.isFinite(kg) || kg < 25 || kg > 500) throw new Error("请检查日期和体重。");
       const before = weights.find(({ id }) => id === day);
       await store.save([{ kind: "weight", id: day, payload: { day, kg }, sample: dialog.row?.sample }]);
