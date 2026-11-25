@@ -10,11 +10,11 @@ import { trend, trendReview } from "../lib/trends";
 import { Button, CardHead, Empty, ErrorText, Field, IconButton, Modal } from "./ui";
 import { WeightPlot } from "./weight-plot";
 
-export function WeightModal({ today, initial, save, close }: {
-  today: string; initial?: LogRow<"weight">; save: (day: string, kg: number) => Promise<void>; close: () => void;
+export function WeightModal({ today, date, initial, save, close }: {
+  today: string; date?: string; initial?: LogRow<"weight">; save: (day: string, kg: number) => Promise<void>; close: () => void;
 }) {
   const { t } = useLanguage();
-  const [day, setDay] = useState(initial?.payload.day ?? today);
+  const [day, setDay] = useState(initial?.payload.day ?? date ?? today);
   const [value, setValue] = useState(initial ? String(initial.payload.kg) : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

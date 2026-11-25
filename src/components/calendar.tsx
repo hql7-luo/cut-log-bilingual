@@ -149,17 +149,6 @@ export function MonthDatePicker({ rows, profile, today, selected, mode, select, 
   </Modal>;
 }
 
-export function HomeDatePicker({ rows, profile, today, addFood, close }: CalendarProps & { close: () => void }) {
-  const [selected, setSelected] = useState(today);
-  const [detailOpen, setDetailOpen] = useState(false);
-  if (detailOpen) {
-    const active = calendarStats(rows, profile, selected, selected, today).days[0];
-    return <CalendarDayDetails active={active} rows={rows} addFood={addFood} close={() => setDetailOpen(false)}/>;
-  }
-  return <MonthDatePicker mode="balance" rows={rows} profile={profile} today={today} selected={selected} close={close}
-    select={(day) => { setSelected(day); setDetailOpen(true); }}/>;
-}
-
 export function CalendarPage({ rows, profile, today, addFood }: CalendarProps) {
   const { language, t } = useLanguage();
   const [view, setView] = useState<CalendarView>("month");
