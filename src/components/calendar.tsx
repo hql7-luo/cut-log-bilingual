@@ -14,7 +14,12 @@ const viewLabels: Record<CalendarView, string> = { week: "周", month: "月", qu
 const weekdays = { zh: ["周一", "周二", "周三", "周四", "周五", "周六", "周日"],
   en: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] };
 type CalendarProps = { rows: Row[]; profile: Profile; today: string; addFood: (day: string) => void };
-type CalendarCell = { day: string; label: string; value?: string; caption?: string; tone?: "over" | "within" | "recorded" };
+type CalendarCell = { day: string; label: string; value?: string; caption?: string; tone?: "deficit" | "surplus" | "recorded" };
+
+function balanceKind(shortfall: number) {
+  if (Math.round(Math.abs(shortfall)) === 0) return "持平";
+  return shortfall > 0 ? "缺口" : "盈余";
+}
 
 // Daily details keep the intake target below the three main figures.
 function EnergyFigures({ intake, target, expenditure, shortfall }: {
@@ -22,12 +27,12 @@ function EnergyFigures({ intake, target, expenditure, shortfall }: {
 }) {
   const { t } = useLanguage();
   const daily = target === undefined;
-  const surplus = daily && shortfall !== null && shortfall < 0;
+  const balance = shortfall === null ? "缺口" : balanceKind(shortfall);
   const metrics = [
     { label: "已记摄入", value: intake },
     ...(target === undefined ? [] : [{ label: "摄入目标", value: target }]),
     { label: "估算消耗", value: expenditure },
-    { label: surplus ? "估算盈余" : "估算缺口", value: surplus ? Math.abs(shortfall) : shortfall },
+    { label: `估算${balance}`, value: shortfall === null ? null : Math.abs(shortfall) },
   ];
   return <dl className={`calendar-figures${daily ? " day-figures" : ""}`}>{metrics.map(({ label, value }) => <div key={label}>
     <dt>{t(label)}</dt><dd>{value === null ? "—" : <>{whole.format(value)} <small>kcal</small></>}</dd>
@@ -46,12 +51,21 @@ function PeriodHeading({ label, canAdvance, move, insideDialog = false }: {
   </div>;
 }
 
-// Keep the food and workout calendars in the same grid, with markers specific to each page.
-function intakeCell({ day, kcal, overTarget }: CalendarDayStats, t: Translate): CalendarCell {
+// Date pickers for food history show the amount logged.
+function intakeCell({ day, kcal }: CalendarDayStats, t: Translate): CalendarCell {
   if (kcal === null) return { day, label: t("未记饮食") };
-  const caption = t(overTarget ? "超目标" : "目标内");
-  return { day, label: t`${caption}，${whole.format(kcal)} 千卡`, value: String(Math.round(kcal)), caption,
-    tone: overTarget ? "over" : "within" };
+  const value = whole.format(kcal);
+  return { day, label: t`${t("已记摄入")}，${value} 千卡`, value, caption: t("摄入"), tone: "recorded" };
+}
+
+// Only label a deficit or surplus for a date with both intake and estimated burn.
+function balanceCell({ day, kcal, shortfall }: CalendarDayStats, t: Translate): CalendarCell {
+  if (kcal === null) return { day, label: t("未记饮食") };
+  if (shortfall === null) return { day, label: t("已记饮食，热量差待估算"), caption: t("待估算"), tone: "recorded" };
+  const kind = balanceKind(shortfall);
+  const value = whole.format(Math.abs(shortfall));
+  return { day, label: t`${t(`估算${kind}`)}，${value} 千卡`, value, caption: t(kind),
+    tone: kind === "缺口" ? "deficit" : kind === "盈余" ? "surplus" : "recorded" };
 }
 
 function CalendarGrid({ days, selected, today, monthLabel, select }: {
@@ -109,13 +123,16 @@ function CalendarDayDetails({ active, rows, addFood, close }: {
 }
 
 export function MonthDatePicker({ rows, profile, today, selected, mode, select, close }: Omit<CalendarProps, "addFood"> & {
-  selected: string; mode: "food" | "training"; select: (day: string) => void; close: () => void;
+  selected: string; mode: "food" | "training" | "balance"; select: (day: string) => void; close: () => void;
 }) {
   const { language, t } = useLanguage();
   const [month, setMonth] = useState(selected);
   const { start, end, label } = calendarPeriod(month, "month", language);
   const days = useMemo(() => {
-    if (mode === "food") return calendarStats(rows, profile, start, end, today).days.map((day) => intakeCell(day, t));
+    if (mode !== "training") {
+      const cell = mode === "balance" ? balanceCell : intakeCell;
+      return calendarStats(rows, profile, start, end, today).days.map((day) => cell(day, t));
+    }
     const counts = new Map<string, number>();
     for (const { payload: { day } } of recordsOf(rows, "workout")) {
       if (day >= start && day <= end && day <= today) counts.set(day, (counts.get(day) ?? 0) + 1);
@@ -127,6 +144,7 @@ export function MonthDatePicker({ rows, profile, today, selected, mode, select, 
   }, [mode, rows, profile, start, end, today, t]);
   return <Modal title={t("选择日期")} close={close}>
     <PeriodHeading label={label} canAdvance={end < today} insideDialog move={(amount) => setMonth(shiftMonth(start, amount))}/>
+    {mode === "balance" && <p className="fine">{t("每日估算缺口或盈余（kcal）")}</p>}
     <CalendarGrid days={days} selected={selected} today={today} select={select}/>
   </Modal>;
 }
@@ -138,7 +156,7 @@ export function HomeDatePicker({ rows, profile, today, addFood, close }: Calenda
     const active = calendarStats(rows, profile, selected, selected, today).days[0];
     return <CalendarDayDetails active={active} rows={rows} addFood={addFood} close={() => setDetailOpen(false)}/>;
   }
-  return <MonthDatePicker mode="food" rows={rows} profile={profile} today={today} selected={selected} close={close}
+  return <MonthDatePicker mode="balance" rows={rows} profile={profile} today={today} selected={selected} close={close}
     select={(day) => { setSelected(day); setDetailOpen(true); }}/>;
 }
 
@@ -171,14 +189,15 @@ export function CalendarPage({ rows, profile, today, addFood }: CalendarProps) {
       <PeriodHeading label={label} canAdvance={end < today} move={move}/>
       <EnergyFigures intake={stats.recorded ? stats.consumed : null} target={stats.recorded ? stats.target : null}
         expenditure={stats.expenditure} shortfall={stats.shortfall}/>
-      <p className="fine">{t`已记 ${stats.recorded} / ${stats.elapsed} 天 · ${stats.overTarget} 天超目标。合计按有记录的日期计算。`} {" "}
+      <p className="fine">{t`已记 ${stats.recorded} / ${stats.elapsed} 天。合计按有饮食记录的日期计算。`} {" "}
         {stats.days.some((day) => day.kcal !== null && day.expenditure !== null && day.energy?.fromSelection) && t("含今天的手选活动预估。")}</p>
       {stats.missingDuration > 0 && <p className="fine">{t`其中 ${stats.missingDuration} 项训练补填时长后会计入消耗。`}</p>}
       {!profile.age && <a href="#settings" className="text-link">{t("填写年龄后查看消耗和缺口")}</a>}
     </section>
-    <section className="card padded" aria-label={t("每日摄入日历")}>
+    <section className="card padded" aria-label={t("每日热量差日历")}>
+      <p className="fine">{t("每日估算缺口或盈余（kcal）")}</p>
       <div className={view === "quarter" ? "calendar-quarter" : ""}>
-        {months.map((days) => <CalendarGrid key={days[0].day} days={days.map((day) => intakeCell(day, t))} selected={selected} today={today}
+        {months.map((days) => <CalendarGrid key={days[0].day} days={days.map((day) => balanceCell(day, t))} selected={selected} today={today}
           monthLabel={view === "quarter" ? monthTitle(days[0].day, language) : undefined}
           select={(day) => { setSelected(day); setDetailOpen(true); }}/>)}
       </div>
