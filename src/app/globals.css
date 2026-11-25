@@ -117,8 +117,8 @@ input, textarea, select { min-width: 0; }
 .calendar-weekday { padding: 4px 0; color: var(--muted); text-align: center; font-size: .72rem; }
 .calendar-day { min-height: 54px; padding: 3px 1px; display: flex; flex-direction: column; justify-content: center; align-items: center;
   gap: 1px; border: 1px solid var(--border); border-radius: 7px; background: var(--inset); font-variant-numeric: tabular-nums; }
-.calendar-day.within { color: var(--good); background: var(--good-surface); }
-.calendar-day.over { color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, var(--inset)); }
+.calendar-day.deficit { color: var(--good); background: var(--good-surface); }
+.calendar-day.surplus { color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, var(--inset)); }
 .calendar-day.recorded { color: var(--accent-text); background: var(--tint); }
 .calendar-day[aria-pressed="true"] { border-color: var(--accent); }
 .calendar-day[aria-current="date"] strong { text-decoration: underline; text-underline-offset: 3px; }
